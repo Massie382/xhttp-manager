@@ -2,16 +2,11 @@
 Limits enforcer script: checks expiry, data caps, device limits.
 Runs as a oneshot systemd service triggered by timer.
 """
-import time
-import json
-import re
-import os
-import sys
+import time, json, re, os, sys
 from collections import defaultdict
 from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from db.database import SessionLocal, init_db
 from db.models import User, AuditLog
 from core.stats_client import get_all_user_stats
@@ -24,7 +19,7 @@ THROTTLE_MINUTES = 5
 LOG_LINE_RE = re.compile(
     r'(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) '
     r'accepted tcp:(\d+\.\d+\.\d+\.\d+):\d+ '
-    r'\[vless\] email: (\S+)'
+    r'\[.*?\] email: (\S+)'
 )
 
 def _count_devices_per_email(window_start: datetime) -> dict:
@@ -58,33 +53,27 @@ def enforce():
         window_start = now_dt - timedelta(minutes=DEVICE_WINDOW_MINUTES)
         device_counts = _count_devices_per_email(window_start)
 
-        # Process active users
         active_users = db.query(User).filter(User.status == 'active').all()
         emails = [u.email_tag for u in active_users]
         stats_list = get_all_user_stats(emails)
         stats_map = {s['email']: s for s in stats_list}
 
         for user in active_users:
-            # Update traffic
             stats = stats_map.get(user.email_tag)
             if stats:
                 total_new = stats['total']
-                delta = total_new - user.bytes_used
-                if delta > 0:
+                if total_new > user.bytes_used:
                     user.bytes_used = total_new
                     db.commit()
 
-            # Check expiry
             if user.expiry_at is not None and user.expiry_at <= now:
                 _revoke_user(db, user, "expired")
                 continue
 
-            # Check data cap
             if user.data_cap_bytes is not None and user.bytes_used >= user.data_cap_bytes:
                 _revoke_user(db, user, "expired_quota")
                 continue
 
-            # Check device limit
             if user.max_devices is not None:
                 current_devices = len(device_counts.get(user.email_tag, set()))
                 if current_devices > user.max_devices:
@@ -94,7 +83,6 @@ def enforce():
                                 {"reason": "device_limit", "devices": current_devices})
                     remove_client(user.uuid)
 
-        # Process suspended users for auto-unsuspend
         suspended_users = db.query(User).filter(User.status == 'suspended').all()
         for user in suspended_users:
             last_suspend = db.query(AuditLog)\
