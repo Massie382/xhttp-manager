@@ -4,7 +4,9 @@ After=xray.service
 
 [Service]
 Type=oneshot
-ExecStart=/opt/xhttp-manager/venv/bin/python -m addon.core.limits_enforcer
+WorkingDirectory=/opt/xhttp-manager/addon
+Environment=PYTHONPATH=/opt/xhttp-manager/addon
+ExecStart=/opt/xhttp-manager/venv/bin/python /opt/xhttp-manager/addon/core/limits_enforcer.py
 User=root
 StandardOutput=journal
 StandardError=journal
