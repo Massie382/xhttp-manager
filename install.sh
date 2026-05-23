@@ -52,19 +52,53 @@ if [[ ! -f /usr/local/etc/xray/config.json ]]; then
 fi
 echo -e "      ${GREEN}✔ Xray config found${NC}"
 
+# ── Relay URL detection (multiple fallbacks) ──────────────────────────────
 INSTALL_LOG="/tmp/xhttp-install.log"
 RELAY_URL=""
 RELAY_PATH=""
+
 if [[ -f "$INSTALL_LOG" ]]; then
-    RELAY_URL=$(grep -oP 'Relay\s*URL\s*:\s*\K\S+' "$INSTALL_LOG" || true)
-    RELAY_PATH=$(grep -oP 'Relay\s*Path\s*:\s*\K\S+' "$INSTALL_LOG" || true)
+    # Try the standard pattern first (handles extra spaces around colons)
+    RELAY_URL=$(grep -oP 'Relay\s*URL\s*:\s*\K\S+' "$INSTALL_LOG" 2>/dev/null || true)
+    RELAY_PATH=$(grep -oP 'Relay\s*Path\s*:\s*\K\S+' "$INSTALL_LOG" 2>/dev/null || true)
+
+    # Fallback: look for any Vercel or Netlify URL in the log
+    if [[ -z "$RELAY_URL" ]]; then
+        RELAY_URL=$(grep -oP 'https?://[a-zA-Z0-9_-]+\.(vercel\.app|netlify\.app)\S*' "$INSTALL_LOG" 2>/dev/null | head -1 || true)
+    fi
+
+    # Fallback: look for "Production URL:" or "Relay URL" without the colon-space pattern
+    if [[ -z "$RELAY_URL" ]]; then
+        RELAY_URL=$(grep -oP '(Production URL|Relay URL)[^a-zA-Z0-9]*\Khttps?://\S+' "$INSTALL_LOG" 2>/dev/null | head -1 || true)
+    fi
+
+    # If path is still empty, check the Xray config for it
+    if [[ -z "$RELAY_PATH" ]]; then
+        RELAY_PATH=$(grep -oP '"path":\s*"\K[^"]+' /usr/local/etc/xray/config.json 2>/dev/null | head -1 || true)
+    fi
 fi
 
+# ── Interactive fallback ──────────────────────────────────────────────────
 if [[ -z "$RELAY_URL" ]]; then
-    echo -e "${RED}Error: Could not determine relay URL from install log.${NC}"
-    exit 1
+    echo -e "      ${YELLOW}⚠ Could not auto-detect relay URL from install log.${NC}"
+    echo ""
+    echo -e "  This is the URL of your Vercel or Netlify relay (e.g. https://my-proxy.vercel.app)."
+    echo -e "  You can find it in your ${BOLD}Vercel/Netlify dashboard${NC} or in ${BOLD}/tmp/xhttp-install.log${NC}."
+    echo ""
+    read -r -p "$(echo -e ${YELLOW}"  Enter relay URL: "${NC})" RELAY_URL
+    if [[ -z "$RELAY_URL" ]]; then
+        echo -e "${RED}Error: No relay URL provided. Aborting.${NC}"
+        exit 1
+    fi
 fi
-echo -e "      ${GREEN}✔ Relay URL detected: ${RELAY_URL}${NC}"
+
+if [[ -z "$RELAY_PATH" ]]; then
+    echo -e "      ${YELLOW}⚠ Could not detect relay path. Using default: /api${NC}"
+    RELAY_PATH="/api"
+fi
+
+echo -e "      ${GREEN}✔ Relay URL: ${RELAY_URL}${NC}"
+echo -e "      ${GREEN}✔ Relay Path: ${RELAY_PATH}${NC}"
 
 echo ""
 echo -e "${CYAN}[2/6] Installing system packages...${NC}"
