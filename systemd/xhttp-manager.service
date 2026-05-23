@@ -6,8 +6,9 @@ Wants=xray.service
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/xhttp-manager
-ExecStart=/opt/xhttp-manager/venv/bin/python -m uvicorn addon.api.main:app --host 127.0.0.1 --port 7171 --log-level info
+WorkingDirectory=/opt/xhttp-manager/addon
+Environment=PYTHONPATH=/opt/xhttp-manager/addon
+ExecStart=/opt/xhttp-manager/venv/bin/python -m uvicorn api.main:app --host 127.0.0.1 --port 7171 --log-level info
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
