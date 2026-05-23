@@ -14,9 +14,17 @@ from db.models import User, AuditLog
 from core.stats_client import get_all_user_stats
 from core.config_manager import remove_client, add_client
 
-# ---------------------------------------------------------------------------
-# Load settings from config.toml (with hardcoded fallbacks if file is missing)
-# ---------------------------------------------------------------------------
+# ── Terminal colour helpers ──────────────────────────────────────────────
+_RED    = "\033[0;31m"
+_GREEN  = "\033[0;32m"
+_YELLOW = "\033[1;33m"
+_CYAN   = "\033[0;36m"
+_NC     = "\033[0m"
+
+def _colour(col: str, text: str) -> str:
+    return f"{col}{text}{_NC}"
+
+# ── Load settings from config.toml ───────────────────────────────────────
 def _load_config():
     config_paths = [
         os.environ.get('XHTTP_MANAGER_CONFIG', ''),
@@ -36,9 +44,7 @@ DEVICE_WINDOW_MINUTES = _cfg.get('enforcer', {}).get('device_window_minutes', 5)
 THROTTLE_MINUTES      = _cfg.get('enforcer', {}).get('device_throttle_minutes', 5)
 LOG_PATH              = _cfg.get('xray', {}).get('access_log', '/var/log/xray/access.log')
 
-# ---------------------------------------------------------------------------
-# Regex for parsing the Xray access log
-# ---------------------------------------------------------------------------
+# ── Regex for parsing the Xray access log ────────────────────────────────
 LOG_LINE_RE = re.compile(
     r'(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) '
     r'accepted tcp:(\d+\.\d+\.\d+\.\d+):\d+ '
@@ -70,6 +76,7 @@ def _count_devices_per_email(window_start: datetime) -> dict:
 def enforce():
     init_db()
     db = SessionLocal()
+    changes = 0
     try:
         now = int(time.time())
         now_dt = datetime.now()
@@ -91,10 +98,15 @@ def enforce():
 
             if user.expiry_at is not None and user.expiry_at <= now:
                 _revoke_user(db, user, "expired")
+                print(f"  {_colour(_RED, 'REVOKED')} {user.username} – expired")
+                changes += 1
                 continue
 
             if user.data_cap_bytes is not None and user.bytes_used >= user.data_cap_bytes:
                 _revoke_user(db, user, "expired_quota")
+                print(f"  {_colour(_RED, 'REVOKED')} {user.username} – quota exceeded "
+                      f"({user.bytes_used / 1024**2:.1f} MB / {user.data_cap_bytes / 1024**2:.1f} MB)")
+                changes += 1
                 continue
 
             if user.max_devices is not None:
@@ -105,6 +117,9 @@ def enforce():
                     _log_action(db, user.username, "suspend",
                                 {"reason": "device_limit", "devices": current_devices})
                     remove_client(user.uuid)
+                    print(f"  {_colour(_YELLOW, 'SUSPEND')} {user.username} – "
+                          f"device limit ({current_devices} > {user.max_devices})")
+                    changes += 1
 
         # Auto-unsuspend users who have been suspended longer than THROTTLE_MINUTES
         suspended_users = db.query(User).filter(User.status == 'suspended').all()
@@ -122,11 +137,15 @@ def enforce():
                         _log_action(db, user.username, "unsuspend",
                                     {"reason": "auto_unsuspend_after_throttle"})
                         add_client(user.uuid, user.email_tag)
+                        print(f"  {_colour(_GREEN, 'UNSUSPEND')} {user.username}")
+                        changes += 1
 
         db.commit()
+        if changes == 0:
+            print(f"  {_colour(_GREEN, 'OK')} all users compliant")
     except Exception as e:
         db.rollback()
-        print(f"Enforcer error: {e}", file=sys.stderr)
+        print(f"  {_colour(_RED, 'ERROR')} {e}", file=sys.stderr)
         raise
     finally:
         db.close()
@@ -149,4 +168,6 @@ def _log_action(db, username, action, detail=None):
     db.commit()
 
 if __name__ == "__main__":
+    print(f"{_CYAN}Enforcer run at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}{_NC}")
     enforce()
+    print(f"{_CYAN}Done.{_NC}")
