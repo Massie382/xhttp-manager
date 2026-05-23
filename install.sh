@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ------------------------------------------------------------------------------
+# Robust way to find the install directory, even if the script is piped from curl
+# ------------------------------------------------------------------------------
+if [[ -z "${BASH_SOURCE[0]:-}" || ! -f "${BASH_SOURCE[0]}" ]]; then
+    # We are being piped (curl | bash). Clone the repo and re-execute.
+    REPO_URL="https://github.com/Massie382/xhttp-manager.git"
+    TMPDIR=$(mktemp -d /tmp/xhttp-manager.XXXXXX)
+    git clone --depth 1 "$REPO_URL" "$TMPDIR"
+    cd "$TMPDIR"
+    exec bash install.sh   # re-run the real file
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ADDON_DST="/opt/xhttp-manager"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
@@ -40,9 +55,6 @@ if [[ -z "$RELAY_URL" ]]; then
     echo -e "${RED}Error: Could not determine relay URL from install log.${NC}"
     exit 1
 fi
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ADDON_DST="/opt/xhttp-manager"
 
 echo -e "${GREEN}Installing addon to $ADDON_DST${NC}"
 
