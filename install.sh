@@ -32,7 +32,7 @@ INSTALL_LOG="/tmp/xhttp-install.log"
 RELAY_URL=""
 RELAY_PATH=""
 if [[ -f "$INSTALL_LOG" ]]; then
-    RELAY_URL=$(grep -oP 'Relay URL:\s*\K.*' "$INSTALL_LOG" || true)
+    RELAY_URL=$(grep -oP 'Relay\s*URL\s*:\s*\K\S*' "$INSTALL_LOG" || true)
     RELAY_PATH=$(grep -oP 'Relay Path:\s*\K.*' "$INSTALL_LOG" || true)
 fi
 
