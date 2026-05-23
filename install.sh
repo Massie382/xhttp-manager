@@ -52,55 +52,55 @@ if [[ ! -f /usr/local/etc/xray/config.json ]]; then
 fi
 echo -e "      ${GREEN}✔ Xray config found${NC}"
 
-# ── Relay URL detection (reads from Xray config, not log) ─────────────────
+# ── Relay URL detection ───────────────────────────────────────────────────
 INSTALL_LOG="/tmp/xhttp-install.log"
 RELAY_URL=""
 RELAY_PATH=""
+SAVED_RELAY="/var/lib/xhttp-manager/.relay_url"
 
-# Best method: read the domain from Xray config and build the relay URL
-# The Xray config always has the correct SNI (domain) and path
-if [[ -f /usr/local/etc/xray/config.json ]]; then
-    # Get the SNI/domain from the TLS settings
+# 1. If we've saved it before, reuse it
+if [[ -f "$SAVED_RELAY" ]]; then
+    RELAY_URL=$(cat "$SAVED_RELAY")
+fi
+
+# 2. Try Xray config's serverName
+if [[ -z "$RELAY_URL" ]] && [[ -f /usr/local/etc/xray/config.json ]]; then
     DOMAIN=$(grep -oP '"serverName":\s*"\K[^"]+' /usr/local/etc/xray/config.json 2>/dev/null | head -1 || true)
-    # Get the path from xhttpSettings
-    RELAY_PATH=$(grep -oP '"path":\s*"\K[^"]+' /usr/local/etc/xray/config.json 2>/dev/null | head -1 || true)
-    # If domain found, the relay URL is https://<domain>
     if [[ -n "$DOMAIN" ]]; then
         RELAY_URL="https://${DOMAIN}"
     fi
 fi
 
-# Fallback: try to parse the install log (handles extra spaces around colons)
+# 3. Try install log patterns
 if [[ -z "$RELAY_URL" ]] && [[ -f "$INSTALL_LOG" ]]; then
     RELAY_URL=$(grep -oP 'Relay\s+URL\s*:\s*\K\S+' "$INSTALL_LOG" 2>/dev/null || true)
-    if [[ -z "$RELAY_PATH" ]]; then
-        RELAY_PATH=$(grep -oP 'Relay\s+Path\s*:\s*\K\S+' "$INSTALL_LOG" 2>/dev/null || true)
-    fi
+    RELAY_URL=${RELAY_URL:-$(grep -oP 'https?://[a-zA-Z0-9_-]+\.(vercel\.app|netlify\.app)\S*' "$INSTALL_LOG" 2>/dev/null | head -1 || true)}
 fi
 
-# Fallback: look for any Vercel or Netlify URL in the log
-if [[ -z "$RELAY_URL" ]] && [[ -f "$INSTALL_LOG" ]]; then
-    RELAY_URL=$(grep -oP 'https?://[a-zA-Z0-9_-]+\.(vercel\.app|netlify\.app)\S*' "$INSTALL_LOG" 2>/dev/null | head -1 || true)
-fi
-
-# Interactive fallback
+# 4. Ask the user once and save it forever
 if [[ -z "$RELAY_URL" ]]; then
     echo -e "      ${YELLOW}⚠ Could not auto-detect relay URL.${NC}"
     echo ""
     echo -e "  This is the URL of your Vercel or Netlify relay (e.g. https://my-proxy.vercel.app)."
-    echo -e "  You can find it in your ${BOLD}Vercel/Netlify dashboard${NC} or by running ${BOLD}xhttp${NC}."
+    echo -e "  Run ${BOLD}xhttp${NC} to see it in the panel."
     echo ""
     read -r -p "$(echo -e ${YELLOW}"  Enter relay URL: "${NC})" RELAY_URL
     if [[ -z "$RELAY_URL" ]]; then
         echo -e "${RED}Error: No relay URL provided. Aborting.${NC}"
         exit 1
     fi
+    mkdir -p "$(dirname "$SAVED_RELAY")"
+    echo "$RELAY_URL" > "$SAVED_RELAY"
 fi
 
+# Path: try Xray config, then install log, fallback to /api
 if [[ -z "$RELAY_PATH" ]]; then
-    echo -e "      ${YELLOW}⚠ Could not detect relay path. Using default: /api${NC}"
-    RELAY_PATH="/api"
+    RELAY_PATH=$(grep -oP '"path":\s*"\K[^"]+' /usr/local/etc/xray/config.json 2>/dev/null | head -1 || true)
 fi
+if [[ -z "$RELAY_PATH" ]] && [[ -f "$INSTALL_LOG" ]]; then
+    RELAY_PATH=$(grep -oP 'Relay\s+Path\s*:\s*\K\S+' "$INSTALL_LOG" 2>/dev/null || true)
+fi
+RELAY_PATH="${RELAY_PATH:-/api}"
 
 echo -e "      ${GREEN}✔ Relay URL: ${RELAY_URL}${NC}"
 echo -e "      ${GREEN}✔ Relay Path: ${RELAY_PATH}${NC}"
