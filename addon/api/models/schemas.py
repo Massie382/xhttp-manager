@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, validator
-from typing import Optional
+from typing import Optional, List
 import re
 
 USERNAME_REGEX = re.compile(r'^[a-zA-Z0-9_-]{1,64}$')
@@ -28,7 +28,7 @@ class UserExtend(BaseModel):
     days: int = Field(..., gt=0)
 
 class BulkUserCreate(BaseModel):
-    users: list[UserCreate]
+    users: List[UserCreate]
 
 class UserResponse(BaseModel):
     id: int
@@ -48,4 +48,4 @@ class UserResponse(BaseModel):
 
 class UserListResponse(BaseModel):
     total: int
-    users: list[UserResponse]
+    users: List[UserResponse]
