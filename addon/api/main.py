@@ -1,11 +1,8 @@
-"""FastAPI application entry point."""
 import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+sys.path.insert(0, '/opt/xhttp-manager/addon')
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routes import users, config, stats, system
+from api.routes import users, config, stats, system
 from db.database import init_db
 
 app = FastAPI(title="xhttp-manager", version="1.0.0")
