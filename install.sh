@@ -16,12 +16,18 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ADDON_DST="/opt/xhttp-manager"
 
+# ── Color definitions ──────────────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
+BOLD='\033[1m'
 NC='\033[0m'
 
-echo -e "${CYAN}xhttp-manager installer${NC}"
+echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${CYAN}${BOLD}  xhttp-manager installer${NC}"
+echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
 
 if [[ $EUID -ne 0 ]]; then
     echo -e "${RED}Error: This script must be run as root${NC}"
@@ -33,15 +39,18 @@ if ! grep -qi 'ubuntu' /etc/os-release; then
     exit 1
 fi
 
+echo -e "${CYAN}[1/6] Checking base system...${NC}"
 if ! systemctl is-active --quiet xray; then
     echo -e "${RED}Error: Xray service not running. Ensure XHTTP-Installer has been deployed.${NC}"
     exit 1
 fi
+echo -e "      ${GREEN}✔ Xray is running${NC}"
 
 if [[ ! -f /usr/local/etc/xray/config.json ]]; then
     echo -e "${RED}Error: Xray config not found at /usr/local/etc/xray/config.json${NC}"
     exit 1
 fi
+echo -e "      ${GREEN}✔ Xray config found${NC}"
 
 INSTALL_LOG="/tmp/xhttp-install.log"
 RELAY_URL=""
@@ -55,23 +64,27 @@ if [[ -z "$RELAY_URL" ]]; then
     echo -e "${RED}Error: Could not determine relay URL from install log.${NC}"
     exit 1
 fi
+echo -e "      ${GREEN}✔ Relay URL detected: ${RELAY_URL}${NC}"
 
-echo -e "${GREEN}Installing addon to $ADDON_DST${NC}"
-
+echo ""
+echo -e "${CYAN}[2/6] Installing system packages...${NC}"
 apt-get update -qq
 apt-get install -y -qq python3 python3-venv python3-pip jq curl sqlite3 rsync
+echo -e "      ${GREEN}✔ Dependencies installed${NC}"
 
-# Use rsync to copy files
+echo -e "${CYAN}[3/6] Copying addon files to ${ADDON_DST}...${NC}"
 rsync -a --delete "$SCRIPT_DIR/" "$ADDON_DST/" --exclude '.git' --exclude '__pycache__'
+echo -e "      ${GREEN}✔ Files copied${NC}"
 
-echo "Setting up Python virtual environment..."
+echo -e "${CYAN}[4/6] Setting up Python virtual environment...${NC}"
 python3 -m venv "$ADDON_DST/venv"
 "$ADDON_DST/venv/bin/pip" install --upgrade pip -q
 "$ADDON_DST/venv/bin/pip" install -r "$ADDON_DST/requirements.txt" -q
+echo -e "      ${GREEN}✔ Python environment ready${NC}"
 
-# Enable Xray stats
-echo "Configuring Xray stats API..."
+echo -e "${CYAN}[5/6] Configuring Xray stats API...${NC}"
 "$ADDON_DST/venv/bin/python" -c "from addon.core.config_manager import enable_stats; enable_stats()"
+echo -e "      ${GREEN}✔ Xray stats API enabled${NC}"
 
 mkdir -p /var/lib/xhttp-manager
 cat > /var/lib/xhttp-manager/deployment.json <<EOL
@@ -85,8 +98,7 @@ cat > /var/lib/xhttp-manager/deployment.json <<EOL
 }
 EOL
 
-# Migrate existing default user
-echo "Migrating default user..."
+echo -e "${CYAN}[6/6] Migrating default user...${NC}"
 DEFAULT_UUID=$(jq -r '.inbounds[0].settings.clients[0].id' /usr/local/etc/xray/config.json 2>/dev/null || true)
 if [[ -n "$DEFAULT_UUID" && "$DEFAULT_UUID" != "null" ]]; then
     "$ADDON_DST/venv/bin/python" -c "
@@ -111,6 +123,9 @@ if not existing:
     db.commit()
 db.close()
 "
+    echo -e "      ${GREEN}✔ Default user migrated${NC}"
+else
+    echo -e "      ${YELLOW}⚠ No existing user to migrate${NC}"
 fi
 
 # Admin token
@@ -134,26 +149,27 @@ cp "$ADDON_DST/addon/cli/xhttp_mgr.sh" /usr/local/bin/xhttp-mgr
 chmod +x /usr/local/bin/xhttp-mgr
 
 sleep 2
+echo ""
 if curl -sf http://127.0.0.1:7171/api/v1/health >/dev/null; then
-    echo -e "${GREEN}✔ xhttp-manager API is running${NC}"
+    echo -e "${GREEN}${BOLD}✔ xhttp-manager API is running${NC}"
 else
-    echo -e "${RED}⚠ API health check failed, check journalctl -u xhttp-manager${NC}"
+    echo -e "${RED}${BOLD}⚠ API health check failed, check: journalctl -u xhttp-manager${NC}"
 fi
 
 echo ""
-echo "╔══════════════════════════════════════════════════════╗"
-echo "║         xhttp-manager INSTALLED SUCCESSFULLY  ✔     ║"
-echo "╚══════════════════════════════════════════════════════╝"
+echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}${BOLD}║     xhttp-manager INSTALLED SUCCESSFULLY  ✔             ║${NC}"
+echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo "  API:       http://127.0.0.1:7171  (localhost only)"
-echo "  CLI:       xhttp-mgr --help"
-echo "  Data:      /var/lib/xhttp-manager/"
-echo "  Logs:      journalctl -u xhttp-manager"
+echo -e "  ${BOLD}API:${NC}       http://127.0.0.1:7171  (localhost only)"
+echo -e "  ${BOLD}CLI:${NC}       xhttp-mgr --help"
+echo -e "  ${BOLD}Data:${NC}      /var/lib/xhttp-manager/"
+echo -e "  ${BOLD}Logs:${NC}      journalctl -u xhttp-manager"
 echo ""
-echo "  Admin Token (save this — shown only once):"
-cat /etc/xhttp-manager/admin.token
+echo -e "  ${YELLOW}${BOLD}Admin Token (save this — shown only once):${NC}"
+echo -e "  ${YELLOW}$(cat /etc/xhttp-manager/admin.token)${NC}"
 echo ""
-echo "  Quick Start:"
-echo "    xhttp-mgr create_user alice --expiry-days 30 --data-cap 100"
-echo "    xhttp-mgr list_users"
-echo "    xhttp-mgr stats"
+echo -e "  ${BOLD}Quick Start:${NC}"
+echo -e "    ${GREEN}xhttp-mgr create_user alice --expiry-days 30 --data-cap 100${NC}"
+echo -e "    xhttp-mgr list_users"
+echo -e "    xhttp-mgr stats"
