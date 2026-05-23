@@ -1,14 +1,32 @@
-"""Manage Xray configuration file."""
-import json
-import shutil
-import subprocess
+"""Manage Xray configuration file. All paths and limits are read from config.toml."""
+import json, os, shutil, subprocess, toml
 from pathlib import Path
 from typing import Any, Dict, List
 
-CONFIG_PATH = Path("/usr/local/etc/xray/config.json")
-BACKUP_DIR = Path("/var/lib/xhttp-manager/backups")
-MAX_BACKUPS = 20
+# ---------------------------------------------------------------------------
+# Load settings from config.toml
+# ---------------------------------------------------------------------------
+def _load_config():
+    config_paths = [
+        os.environ.get('XHTTP_MANAGER_CONFIG', ''),
+        '/etc/xhttp-manager/config.toml',
+        os.path.join(os.path.dirname(__file__), '..', 'config.toml'),
+    ]
+    for cp in config_paths:
+        try:
+            if cp and os.path.exists(cp):
+                return toml.load(cp)
+        except Exception:
+            pass
+    return {}
 
+_cfg = _load_config()
+CONFIG_PATH = Path(_cfg.get('xray', {}).get('config_path', '/usr/local/etc/xray/config.json'))
+BACKUP_DIR  = Path(_cfg.get('storage', {}).get('backup_dir', '/var/lib/xhttp-manager/backups'))
+MAX_BACKUPS = _cfg.get('storage', {}).get('max_backups', 20)
+RELOAD_CMD  = _cfg.get('xray', {}).get('reload_cmd', 'systemctl restart xray').split()
+
+# ---------------------------------------------------------------------------
 def _backup_config():
     import time
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
@@ -29,7 +47,7 @@ def write_config(config: Dict[str, Any], reload: bool = True):
         json.dump(config, f, indent=2)
     tmp_path.rename(CONFIG_PATH)
     if reload:
-        subprocess.run(["systemctl", "restart", "xray"], check=True)
+        subprocess.run(RELOAD_CMD, check=True)
 
 def add_client(uuid: str, email: str):
     config = read_config()
