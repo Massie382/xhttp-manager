@@ -75,7 +75,7 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)):
 def list_users(status: Optional[str] = Query(None), limit: int = Query(100, le=1000), offset: int = Query(0),
                db: Session = Depends(get_db)):
     query = db.query(User)
-    if status:
+    if status and status != "all":
         query = query.filter(User.status == status)
     total = query.count()
     users = query.offset(offset).limit(limit).all()
@@ -216,3 +216,15 @@ def bulk_create(payload: BulkUserCreate, db: Session = Depends(get_db)):
             db.rollback()
             results.append({"username": user_data.username, "error": str(e)})
     return {"created": created, "failed": len(payload.users) - created, "results": results}
+
+@router.get("/{username}/export", dependencies=[Depends(verify_admin)])
+def export_user_config(username: str, format: str = Query("uri"), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        raise HTTPException(404, detail="User not found")
+    if format == "uri":
+        return {"vless_uri": user.vless_uri}
+    elif format == "json":
+        return {"id": user.uuid, "email": user.email_tag, "level": 0}
+    else:
+        raise HTTPException(400, detail="Invalid format")
