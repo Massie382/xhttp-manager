@@ -1,21 +1,44 @@
 """
 Limits enforcer script: checks expiry, data caps, device limits.
 Runs as a oneshot systemd service triggered by timer.
+Reads all configurable values from config.toml.
 """
-import time, json, re, os, sys
+import time, json, re, os, sys, toml
 from collections import defaultdict
 from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from db.database import SessionLocal, init_db
 from db.models import User, AuditLog
 from core.stats_client import get_all_user_stats
 from core.config_manager import remove_client, add_client
 
-LOG_PATH = "/var/log/xray/access.log"
-DEVICE_WINDOW_MINUTES = 5
-THROTTLE_MINUTES = 5
+# ---------------------------------------------------------------------------
+# Load settings from config.toml (with hardcoded fallbacks if file is missing)
+# ---------------------------------------------------------------------------
+def _load_config():
+    config_paths = [
+        os.environ.get('XHTTP_MANAGER_CONFIG', ''),
+        '/etc/xhttp-manager/config.toml',
+        os.path.join(os.path.dirname(__file__), '..', 'config.toml'),
+    ]
+    for cp in config_paths:
+        try:
+            if cp and os.path.exists(cp):
+                return toml.load(cp)
+        except Exception:
+            pass
+    return {}
 
+_cfg = _load_config()
+DEVICE_WINDOW_MINUTES = _cfg.get('enforcer', {}).get('device_window_minutes', 5)
+THROTTLE_MINUTES      = _cfg.get('enforcer', {}).get('device_throttle_minutes', 5)
+LOG_PATH              = _cfg.get('xray', {}).get('access_log', '/var/log/xray/access.log')
+
+# ---------------------------------------------------------------------------
+# Regex for parsing the Xray access log
+# ---------------------------------------------------------------------------
 LOG_LINE_RE = re.compile(
     r'(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) '
     r'accepted tcp:(\d+\.\d+\.\d+\.\d+):\d+ '
@@ -83,6 +106,7 @@ def enforce():
                                 {"reason": "device_limit", "devices": current_devices})
                     remove_client(user.uuid)
 
+        # Auto-unsuspend users who have been suspended longer than THROTTLE_MINUTES
         suspended_users = db.query(User).filter(User.status == 'suspended').all()
         for user in suspended_users:
             last_suspend = db.query(AuditLog)\
