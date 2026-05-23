@@ -1,4 +1,5 @@
-import os
+import os, sys
+sys.path.insert(0, '/opt/xhttp-manager/addon')
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 import toml
@@ -18,5 +19,5 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 def init_db():
-    import db.models  # noqa: F401
+    from db.models import User, AuditLog, Setting
     Base.metadata.create_all(bind=engine)
