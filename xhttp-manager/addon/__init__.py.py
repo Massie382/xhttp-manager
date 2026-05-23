@@ -1,1 +1,0 @@
-# xhttp-manager addon package
