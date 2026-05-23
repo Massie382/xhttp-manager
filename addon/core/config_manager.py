@@ -29,7 +29,7 @@ def write_config(config: Dict[str, Any], reload: bool = True):
         json.dump(config, f, indent=2)
     tmp_path.rename(CONFIG_PATH)
     if reload:
-        subprocess.run(["systemctl", "reload", "xray"], check=True)
+        subprocess.run(["systemctl", "restart", "xray"], check=True)
 
 def add_client(uuid: str, email: str):
     config = read_config()
@@ -52,7 +52,7 @@ def get_clients() -> List[Dict[str, Any]]:
     return config["inbounds"][0]["settings"]["clients"]
 
 def enable_stats():
-    """Inject stats, api, and policy blocks; add loopback inbound."""
+    """Inject stats, api, and policy blocks; use built-in API listener."""
     config = read_config()
     if "stats" not in config:
         config["stats"] = {}
@@ -61,6 +61,7 @@ def enable_stats():
             "tag": "api",
             "services": ["StatsService"]
         }
+    config["api"]["listen"] = "127.0.0.1:10085"
     if "policy" not in config:
         config["policy"] = {
             "levels": {
@@ -74,13 +75,6 @@ def enable_stats():
                 "statsInboundUplink": True
             }
         }
-    inbounds = config["inbounds"]
-    if not any(ib.get("tag") == "api" for ib in inbounds):
-        inbounds.append({
-            "listen": "127.0.0.1",
-            "port": 10085,
-            "protocol": "dokodemo-door",
-            "settings": {"address": "127.0.0.1"},
-            "tag": "api"
-        })
+    # Remove any previous dokodemo-door inbound tagged 'api'
+    config["inbounds"] = [i for i in config.get("inbounds", []) if i.get("tag") != "api"]
     write_config(config)
