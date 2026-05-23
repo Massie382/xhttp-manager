@@ -1,11 +1,11 @@
-"""Stats and health endpoints."""
+import sys, subprocess
+sys.path.insert(0, '/opt/xhttp-manager/addon')
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from db.database import SessionLocal
 from db.models import User
 from core.stats_client import get_user_stats
-from .api.auth import verify_admin
-import subprocess
+from api.auth import verify_admin
 
 router = APIRouter(prefix="/api/v1", tags=["stats"])
 
