@@ -20,3 +20,31 @@ def deployment_info():
             return json.load(f)
     except FileNotFoundError:
         raise HTTPException(404, detail="Deployment info not found")
+
+@router.get("/status", dependencies=[Depends(verify_admin)])
+def system_status():
+    import os
+    status = {
+        "xray_running": False,
+        "api_running": False,
+        "enforcer_timer": False,
+        "db_size": 0
+    }
+    try:
+        subprocess.run(["systemctl", "is-active", "--quiet", "xray"], check=True)
+        status["xray_running"] = True
+    except:
+        pass
+    try:
+        subprocess.run(["systemctl", "is-active", "--quiet", "xhttp-manager"], check=True)
+        status["api_running"] = True
+    except:
+        pass
+    try:
+        subprocess.run(["systemctl", "is-active", "--quiet", "xhttp-enforcer.timer"], check=True)
+        status["enforcer_timer"] = True
+    except:
+        pass
+    if os.path.exists("/var/lib/xhttp-manager/db.sqlite"):
+        status["db_size"] = os.path.getsize("/var/lib/xhttp-manager/db.sqlite")
+    return status
