@@ -1,5 +1,5 @@
-"""User management routes."""
-import time
+import time, json, sys
+sys.path.insert(0, '/opt/xhttp-manager/addon')
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -8,12 +8,11 @@ from db.models import User, AuditLog
 from core.crypto import generate_uuid
 from core.config_manager import add_client, remove_client
 from core.uri_builder import build_vless_uri
-from .api.auth import verify_admin
-from ..models.schemas import (
+from api.auth import verify_admin
+from api.models.schemas import (
     UserCreate, UserUpdate, UserExtend, BulkUserCreate,
     UserResponse, UserListResponse
 )
-import json
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
