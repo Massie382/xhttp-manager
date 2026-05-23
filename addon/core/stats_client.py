@@ -1,9 +1,30 @@
-import sys, subprocess, json
+import sys, subprocess, json, os, toml
 sys.path.insert(0, '/opt/xhttp-manager/addon')
 from typing import Dict, List
 
+# ---------------------------------------------------------------------------
+# Load gRPC port from config.toml
+# ---------------------------------------------------------------------------
+def _load_config():
+    config_paths = [
+        os.environ.get('XHTTP_MANAGER_CONFIG', ''),
+        '/etc/xhttp-manager/config.toml',
+        os.path.join(os.path.dirname(__file__), '..', 'config.toml'),
+    ]
+    for cp in config_paths:
+        try:
+            if cp and os.path.exists(cp):
+                return toml.load(cp)
+        except Exception:
+            pass
+    return {}
+
+_cfg = _load_config()
+GRPC_SERVER = f"127.0.0.1:{_cfg.get('enforcer', {}).get('stats_grpc_port', 10085)}"
+
+# ---------------------------------------------------------------------------
 def _run_statsquery(pattern: str = "") -> Dict[str, int]:
-    cmd = ["/usr/local/bin/xray", "api", "statsquery", "-server", "127.0.0.1:10085", "-pattern", pattern]
+    cmd = ["/usr/local/bin/xray", "api", "statsquery", "-server", GRPC_SERVER, "-pattern", pattern]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=5, check=True)
         data = json.loads(proc.stdout)
