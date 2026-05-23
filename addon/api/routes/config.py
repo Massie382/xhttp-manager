@@ -1,11 +1,11 @@
-"""Config and export endpoints."""
+import sys, io
+sys.path.insert(0, '/opt/xhttp-manager/addon')
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse, JSONResponse, Response
 from sqlalchemy.orm import Session
 from db.database import SessionLocal
 from db.models import User
-from .api.auth import verify_admin
-import io
+from api.auth import verify_admin
 import qrcode
 
 router = APIRouter(prefix="/api/v1", tags=["config"])
@@ -36,4 +36,4 @@ def user_config(username: str, format: str = Query("uri"), db: Session = Depends
         buf.seek(0)
         return Response(content=buf.getvalue(), media_type="image/png")
     else:
-        raise HTTPException(400, detail="Invalid format. Use uri, json, or qr")
+        raise HTTPException(400, detail="Invalid format")
