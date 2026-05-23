@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
 # xhttp-mgr CLI - manages XHTTP users via REST API
 
+# ── Color definitions ──────────────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
 MGMT_URL="http://127.0.0.1:7171"
 TOKEN_FILE="/etc/xhttp-manager/admin.token"
 
 if [[ ! -f "$TOKEN_FILE" ]]; then
-    echo "Error: Admin token not found at $TOKEN_FILE" >&2
+    echo -e "${RED}Error: Admin token not found at $TOKEN_FILE${NC}" >&2
     exit 1
 fi
 
@@ -22,33 +30,30 @@ _api() {
 }
 
 _usage() {
-    cat <<EOF
-Usage: xhttp-mgr <command> [options]
-
-Commands:
-  create_user <username> [--expiry-days N] [--data-cap N] [--max-devices N] [--note TEXT] [--output uri|json|qr]
-  revoke_user <username> [--force]
-  suspend_user <username>
-  unsuspend_user <username>
-  extend_user <username> --days N
-  set_limits <username> [--expiry-days N] [--data-cap N] [--max-devices N] [--reset-usage]
-  list_users [--status STATUS] [--format table|json|csv]
-  export_config <username> [--format uri|json|qr]
-  bulk_create --file CSV_FILE
-  bulk_create --count N --prefix PREFIX [--expiry-days N] [--data-cap N] [--max-devices N]
-  stats [username]
-  auth show|rotate
-  db backup|restore FILE|vacuum
-  system status|reload|logs
-
-Global options:
-  --help   Show this message
-EOF
+    echo -e "${BOLD}Usage:${NC} xhttp-mgr <command> [options]"
+    echo ""
+    echo -e "${BOLD}Commands:${NC}"
+    echo -e "  ${GREEN}create_user${NC}    <username> [--expiry-days N] [--data-cap N] [--max-devices N] [--note TEXT] [--output uri|json|qr]"
+    echo -e "  ${RED}revoke_user${NC}    <username> [--force]"
+    echo -e "  ${YELLOW}suspend_user${NC}   <username>"
+    echo -e "  ${GREEN}unsuspend_user${NC} <username>"
+    echo -e "  ${CYAN}extend_user${NC}    <username> --days N"
+    echo -e "  ${CYAN}set_limits${NC}     <username> [--expiry-days N] [--data-cap N] [--max-devices N] [--reset-usage]"
+    echo -e "  ${BOLD}list_users${NC}     [--status STATUS] [--format table|json|csv]"
+    echo -e "  ${BOLD}export_config${NC}  <username> [--format uri|json|qr]"
+    echo -e "  ${BOLD}bulk_create${NC}    --file CSV_FILE"
+    echo -e "  ${BOLD}bulk_create${NC}    --count N --prefix PREFIX [--expiry-days N] [--data-cap N] [--max-devices N]"
+    echo -e "  ${BOLD}stats${NC}          [username]"
+    echo -e "  ${BOLD}auth${NC}           show|rotate"
+    echo -e "  ${BOLD}db${NC}             backup|restore FILE|vacuum"
+    echo -e "  ${BOLD}system${NC}         status|reload|logs"
+    echo ""
+    echo -e "  ${BOLD}--help${NC}         Show this message"
 }
 
 _require_param() {
     if [[ -z "$1" ]]; then
-        echo "Error: missing required parameter" >&2
+        echo -e "${RED}Error: missing required parameter${NC}" >&2
         exit 1
     fi
 }
@@ -65,7 +70,7 @@ _do_create_user() {
             --max-devices) max_devices="$2"; shift 2 ;;
             --note) note="$2"; shift 2 ;;
             --output) output="$2"; shift 2 ;;
-            *) echo "Unknown option: $1"; exit 1 ;;
+            *) echo -e "${RED}Unknown option: $1${NC}"; exit 1 ;;
         esac
     done
     local payload="{\"username\":\"$username\""
@@ -76,7 +81,7 @@ _do_create_user() {
     payload="$payload}"
     local resp=$(_api POST "/api/v1/users" -d "$payload")
     if [[ "$output" == "uri" ]]; then
-        echo "$resp" | jq -r '.vless_uri'
+        echo -e "${GREEN}$(echo "$resp" | jq -r '.vless_uri')${NC}"
     else
         echo "$resp" | jq .
     fi
@@ -88,18 +93,18 @@ _do_revoke_user() {
     local force=false
     if [[ "$1" == "--force" ]]; then force=true; fi
     if ! $force; then
-        read -p "Revoke user '$username'? (y/N) " confirm
+        read -p "$(echo -e ${YELLOW}"Revoke user '$username'? (y/N) "${NC})" confirm
         [[ "$confirm" != "y" ]] && exit 0
     fi
-    _api DELETE "/api/v1/users/$username" | jq -r '.message'
+    echo -e "${RED}$(_api DELETE "/api/v1/users/$username" | jq -r '.message')${NC}"
 }
 
 _do_suspend_user() {
-    _api POST "/api/v1/users/$1/suspend" | jq -r '.message'
+    echo -e "${YELLOW}$(_api POST "/api/v1/users/$1/suspend" | jq -r '.message')${NC}"
 }
 
 _do_unsuspend_user() {
-    _api POST "/api/v1/users/$1/unsuspend" | jq -r '.message'
+    echo -e "${GREEN}$(_api POST "/api/v1/users/$1/unsuspend" | jq -r '.message')${NC}"
 }
 
 _do_extend_user() {
@@ -109,10 +114,10 @@ _do_extend_user() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --days) days="$2"; shift 2 ;;
-            *) echo "Unknown option: $1"; exit 1 ;;
+            *) echo -e "${RED}Unknown option: $1${NC}"; exit 1 ;;
         esac
     done
-    [[ -z "$days" ]] && { echo "Error: --days required"; exit 1; }
+    [[ -z "$days" ]] && { echo -e "${RED}Error: --days required${NC}" >&2; exit 1; }
     _api POST "/api/v1/users/$username/extend" -d "{\"days\":$days}" | jq .
 }
 
@@ -126,7 +131,7 @@ _do_set_limits() {
             --data-cap) data_cap="$2"; shift 2 ;;
             --max-devices) max_devices="$2"; shift 2 ;;
             --reset-usage) reset_usage="true"; shift ;;
-            *) echo "Unknown option: $1"; exit 1 ;;
+            *) echo -e "${RED}Unknown option: $1${NC}"; exit 1 ;;
         esac
     done
     local payload="{"
@@ -145,7 +150,7 @@ _do_list_users() {
         case "$1" in
             --status) status="$2"; shift 2 ;;
             --format) format="$2"; shift 2 ;;
-            *) echo "Unknown option: $1"; exit 1 ;;
+            *) echo -e "${RED}Unknown option: $1${NC}"; exit 1 ;;
         esac
     done
     local resp=$(_api GET "/api/v1/users?status=$status&limit=1000")
@@ -154,7 +159,7 @@ _do_list_users() {
     elif [[ "$format" == "csv" ]]; then
         echo "$resp" | jq -r '.users[] | [.username,.status,.expiry_at,.bytes_used,.data_cap_bytes,.max_devices,.vless_uri] | @csv'
     else
-        echo "USERNAME   STATUS    EXPIRY      USED     CAP     DEVS  NOTE"
+        echo -e "${BOLD}USERNAME   STATUS    EXPIRY      USED     CAP     DEVS  NOTE${NC}"
         echo "$resp" | jq -r '.users[] | "\(.username) \(.status) \(.expiry_at // "none") \(.bytes_used) \(.data_cap_bytes // "none") \(.max_devices // "-") \(.note // "")"' | column -t
     fi
 }
@@ -166,12 +171,12 @@ _do_export_config() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --format) format="$2"; shift 2 ;;
-            *) echo "Unknown option: $1"; exit 1 ;;
+            *) echo -e "${RED}Unknown option: $1${NC}"; exit 1 ;;
         esac
     done
     if [[ "$format" == "qr" ]]; then
         _api GET "/api/v1/users/$username/config?format=qr" --output "qr_${username}.png"
-        echo "QR saved to qr_${username}.png"
+        echo -e "${GREEN}QR saved to qr_${username}.png${NC}"
     else
         _api GET "/api/v1/users/$username/config?format=$format"
     fi
@@ -187,7 +192,7 @@ _do_bulk_create() {
             --expiry-days) expiry_days="$2"; shift 2 ;;
             --data-cap) data_cap="$2"; shift 2 ;;
             --max-devices) max_devices="$2"; shift 2 ;;
-            *) echo "Unknown option: $1"; exit 1 ;;
+            *) echo -e "${RED}Unknown option: $1${NC}"; exit 1 ;;
         esac
     done
     if [[ -n "$file" ]]; then
@@ -220,7 +225,7 @@ _do_bulk_create() {
         users_json="$users_json]"
         _api POST "/api/v1/users/bulk" -d "{\"users\":$users_json}" | jq .
     else
-        echo "Error: specify --file or --count with --prefix" >&2
+        echo -e "${RED}Error: specify --file or --count with --prefix${NC}" >&2
         exit 1
     fi
 }
@@ -235,14 +240,17 @@ _do_stats() {
 
 _do_auth() {
     case "$1" in
-        show) echo "Current token: $TOKEN" ;;
+        show)
+            echo -e "${YELLOW}${BOLD}Current token:${NC} ${YELLOW}$TOKEN${NC}"
+            ;;
         rotate)
             new_token=$(openssl rand -hex 32)
             echo "xmgr_$new_token" > "$TOKEN_FILE"
-            echo "Token rotated. Restart API service to apply."
+            echo -e "${YELLOW}${BOLD}Token rotated. Restart API service to apply.${NC}"
             systemctl restart xhttp-manager
             ;;
-        *) echo "Unknown auth command: $1"; exit 1 ;;
+        *)
+            echo -e "${RED}Unknown auth command: $1${NC}"; exit 1 ;;
     esac
 }
 
@@ -250,8 +258,8 @@ _do_db() {
     case "$1" in
         backup) sqlite3 /var/lib/xhttp-manager/db.sqlite .dump ;;
         restore) sqlite3 /var/lib/xhttp-manager/db.sqlite < "$2" ;;
-        vacuum) sqlite3 /var/lib/xhttp-manager/db.sqlite "VACUUM;" ;;
-        *) echo "Unknown db command: $1"; exit 1 ;;
+        vacuum) sqlite3 /var/lib/xhttp-manager/db.sqlite "VACUUM;"; echo -e "${GREEN}Database vacuumed${NC}" ;;
+        *) echo -e "${RED}Unknown db command: $1${NC}"; exit 1 ;;
     esac
 }
 
@@ -259,12 +267,13 @@ _do_system() {
     case "$1" in
         status)
             _api GET "/api/v1/health" | jq .
-            echo "Enforcer timer:"
+            echo ""
+            echo -e "${BOLD}Enforcer timer:${NC}"
             systemctl is-active xhttp-enforcer.timer
             ;;
         reload) _api POST "/api/v1/system/reload" | jq . ;;
         logs) journalctl -u xray --no-pager -n 50 -f ;;
-        *) echo "Unknown system command: $1"; exit 1 ;;
+        *) echo -e "${RED}Unknown system command: $1${NC}"; exit 1 ;;
     esac
 }
 
@@ -285,5 +294,9 @@ case "$COMMAND" in
     db) shift; _do_db "$@" ;;
     system) shift; _do_system "$@" ;;
     --help|help) _usage ;;
-    *) echo "Unknown command: $COMMAND"; _usage; exit 1 ;;
+    *)
+        echo -e "${RED}Unknown command: $COMMAND${NC}" >&2
+        _usage
+        exit 1
+        ;;
 esac
