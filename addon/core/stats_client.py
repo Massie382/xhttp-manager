@@ -1,43 +1,34 @@
-"""Query Xray stats via CLI tool."""
-import json
-import subprocess
+import sys, subprocess, json
+sys.path.insert(0, '/opt/xhttp-manager/addon')
 from typing import Dict, List
 
 def _run_statsquery(pattern: str = "") -> Dict[str, int]:
-    cmd = [
-        "/usr/local/bin/xray", "api", "statsquery",
-        "--server=127.0.0.1:10085",
-        "-pattern", pattern
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    data = json.loads(proc.stdout)
-    stats = {}
-    for item in data.get("stat", []):
-        name = item["name"]
-        value = int(item.get("value", 0))
-        stats[name] = value
-    return stats
+    cmd = ["/usr/local/bin/xray", "api", "statsquery", "-server", "127.0.0.1:10085", "-pattern", pattern]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=5, check=True)
+        data = json.loads(proc.stdout)
+        stats = {}
+        for item in data.get("stat", []):
+            stats[item["name"]] = int(item.get("value", 0))
+        return stats
+    except:
+        return {}
 
 def get_user_stats(email: str) -> Dict[str, int]:
-    pattern = f"user>>>{email}>>>traffic>>>"
-    raw = _run_statsquery(pattern)
-    uplink = raw.get(f"user>>>{email}>>>traffic>>>uplink", 0)
-    downlink = raw.get(f"user>>>{email}>>>traffic>>>downlink", 0)
-    return {"uplink": uplink, "downlink": downlink, "total": uplink + downlink}
+    stats = _run_statsquery(f"user>>>{email}>>>traffic>>>")
+    return {
+        "uplink": stats.get(f"user>>>{email}>>>traffic>>>uplink", 0),
+        "downlink": stats.get(f"user>>>{email}>>>traffic>>>downlink", 0),
+        "total": stats.get(f"user>>>{email}>>>traffic>>>uplink", 0) + stats.get(f"user>>>{email}>>>traffic>>>downlink", 0)
+    }
 
-def get_all_user_stats(emails: List[str]) -> List[Dict[str, any]]:
+def get_all_user_stats(emails: List[str]) -> List[Dict]:
     if not emails:
         return []
-    pattern = "user>>>"
-    raw = _run_statsquery(pattern)
+    all_stats = _run_statsquery("user>>>")
     results = []
     for email in emails:
-        uplink = raw.get(f"user>>>{email}>>>traffic>>>uplink", 0)
-        downlink = raw.get(f"user>>>{email}>>>traffic>>>downlink", 0)
-        results.append({
-            "email": email,
-            "uplink": uplink,
-            "downlink": downlink,
-            "total": uplink + downlink
-        })
+        up = all_stats.get(f"user>>>{email}>>>traffic>>>uplink", 0)
+        down = all_stats.get(f"user>>>{email}>>>traffic>>>downlink", 0)
+        results.append({"email": email, "uplink": up, "downlink": down, "total": up + down})
     return results
