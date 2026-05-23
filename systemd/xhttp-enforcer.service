@@ -1,0 +1,10 @@
+[Unit]
+Description=XHTTP Manager Limits Enforcer (oneshot)
+After=xray.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/xhttp-manager/venv/bin/python -m addon.core.limits_enforcer
+User=root
+StandardOutput=journal
+StandardError=journal
