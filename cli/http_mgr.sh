@@ -170,7 +170,6 @@ _do_export_config() {
         esac
     done
     if [[ "$format" == "qr" ]]; then
-        # Use API to get PNG and save to file
         _api GET "/api/v1/users/$username/config?format=qr" --output "qr_${username}.png"
         echo "QR saved to qr_${username}.png"
     else
