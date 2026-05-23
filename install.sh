@@ -77,14 +77,14 @@ if [[ -z "$RELAY_URL" ]] && [[ -f "$INSTALL_LOG" ]]; then
     RELAY_URL=${RELAY_URL:-$(grep -oP 'https?://[a-zA-Z0-9_-]+\.(vercel\.app|netlify\.app)\S*' "$INSTALL_LOG" 2>/dev/null | head -1 || true)}
 fi
 
-# 4. Ask the user once and save it forever
+# 4. Ask the user once and save it forever (reads from /dev/tty for piped installs)
 if [[ -z "$RELAY_URL" ]]; then
     echo -e "      ${YELLOW}⚠ Could not auto-detect relay URL.${NC}"
     echo ""
     echo -e "  This is the URL of your Vercel or Netlify relay (e.g. https://my-proxy.vercel.app)."
     echo -e "  Run ${BOLD}xhttp${NC} to see it in the panel."
     echo ""
-    read -r -p "$(echo -e ${YELLOW}"  Enter relay URL: "${NC})" RELAY_URL
+    read -r -p "$(echo -e ${YELLOW}"  Enter relay URL: "${NC})" RELAY_URL < /dev/tty
     if [[ -z "$RELAY_URL" ]]; then
         echo -e "${RED}Error: No relay URL provided. Aborting.${NC}"
         exit 1
